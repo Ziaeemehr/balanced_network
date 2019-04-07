@@ -14,14 +14,14 @@ from lib import *
 from time import time 
 
 #---------------------------------------------------------#
-order  = 250
+order  = 2500
 params = {
     "t_sim"      : 1000.0,
     "t_trans"    : 50.0,
     "NE"         : 4 * order,
     "NI"         : 1 * order,
     "I_e"        : 0.0,
-    "dt"         : 0.01,
+    "dt"         : 0.1,
     "delay"      : 1.0,
     "j_exc_exc"  : 0.33,       # EE connection strength
     "j_exc_inh"  : 1.5,        # EI connection strength
@@ -35,8 +35,8 @@ params = {
     "tau_syn_in" : 2.0,
     "poiss_to_exc_w" : 5.0,  # weight
     "poiss_to_inh_w" : 2.0,  # weigth
-    "poiss_rate_exc" : 18000.0,
-    "poiss_rate_inh" : 16300.0,
+    "poiss_rate_exc" : 8000.0,
+    "poiss_rate_inh" : 6300.0,
     "vol_step" : 1,
     "nthreads" : 4,
     "num_sim"  : 1,

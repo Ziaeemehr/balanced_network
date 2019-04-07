@@ -27,7 +27,7 @@ class iaf_neuron(object):
     built = False       # True, if build()   was called
     connected = False   # True, if connect() was called    
 
-    tauMem = 20.0
+    tau_m = 20.0
     t_ref = 2.0
     E_L = 0.0
     V_reset = 0.0
@@ -40,7 +40,7 @@ class iaf_neuron(object):
     
         self.name = self.__class__.__name__
         nest.ResetKernel()
-        nest.set_verbosity('M_WARNING')  
+        nest.set_verbosity('M_QUIET') #M_QUIET  M_WARNING
     
     #---------------------------------------------------------------#
     def set_params(self, **par):
@@ -75,7 +75,7 @@ class iaf_neuron(object):
         
         neuron_params = {
             "C_m"       : self.C_m,
-            "tau_m"     : self.tauMem,
+            "tau_m"     : self.tau_m,
             "t_ref"     : self.t_ref,
             "E_L"       : self.E_L,
             "V_th"      : self.V_th,
@@ -118,6 +118,8 @@ class iaf_neuron(object):
                                         self.NE, params={'rate': self.poiss_to_exc_w})
         self.poiss_gen_inh = nest.Create("poisson_generator",
                                         self.NI, params={'rate': self.poiss_to_inh_w})
+        self.shared_poiss_gen_exc = nest.Create("poisson_generator", 1,
+                                        params={'rate': self.poiss_to_exc_w})
 
         # print nest.GetStatus(self.nodes_exc, "V_th") 
 
@@ -236,6 +238,11 @@ class iaf_neuron(object):
             self.nodes_inh, 
             "one_to_one", 
             syn_spec={"weight": self.poiss_to_inh_w})
+        
+        nest.Connect(
+            self.shared_poiss_gen_exc,
+            self.nodes_exc,
+            syn_spec={'weight':self.poiss_to_exc_w})
 
         # nest.Connect(self.multimeters, self.neurons, 'one_to_one')
 

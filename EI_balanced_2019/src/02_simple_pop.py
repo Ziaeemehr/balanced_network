@@ -3,6 +3,8 @@ import pylab as pl
 import nest 
 from sys import exit 
 from time import time
+import nest.raster_plot
+
 
 np.random.seed(12587)
 
@@ -10,13 +12,13 @@ start = time()
 nest.set_verbosity("M_WARNING")
 dt = 0.01 
 N = 10
-t_sim = 100.0
+t_sim = 1200.0
 I_e = 0.0
-tauMem = 20.0
+tau_m = 20.0
 epsilonEE = 1.0
-p_rate = 2000.0 #N*50.0
-poiss_to_exc_pop = 0.1     # weight
-j_exc_exc = 0.5            # EE connection strength
+p_rate = 1350.0 #N*50.0
+poiss_to_exc_pop = 0.1      # weight
+j_exc_exc = 0.5             # EE connection strength
 std_exc_exc = 0.0           # std connection strength
 delay = 1.0
 V_th  = 20.0
@@ -24,6 +26,7 @@ C_m   = 1.0
 t_ref = 2.0
 E_L   = 0.0
 V_reset = 0.0
+V_m = 0.0
 neuron_model = "iaf_psc_alpha"
 
 nthreads = 4
@@ -41,11 +44,11 @@ nest.SetKernelStatus({'grng_seed': msd + n_vp,
                       'rng_seeds': msdrange2})
 
 neuron_params = {"C_m": C_m,
-                 "tau_m": tauMem,
+                 "tau_m": tau_m,
                  "t_ref": t_ref,
                  "E_L": E_L,
                  "V_reset": V_reset,
-                 "V_m": 0.0,
+                 "V_m": V_m,
                  "V_th": V_th}
 
 #################### BUILDING ####################
@@ -90,9 +93,9 @@ conn_dict_EE = {"rule": "pairwise_bernoulli",
 
 nest.CopyModel("static_synapse", "excitatory",
                {"weight": poiss_to_exc_pop,
-               "delay": delay})
+                "delay": delay})
 
-nest.Connect(pop, pop, conn_dict_EE,syn_spec=syn_dict)
+nest.Connect(pop, pop[::-1], conn_dict_EE,syn_spec=syn_dict)
 # conn = nest.GetConnections(pop)
 # for i in nest.GetStatus(conn, ['source', 'target']):
 #     print i
@@ -105,28 +108,31 @@ nest.Simulate(t_sim)
 
 print "Done in %g seconds." % (time()-start)
 ################### PLOTTING ###################
-fig, ax = pl.subplots(2, figsize=(12,8), sharex=True)
-for i in range(0,N):
-    dmm = nest.GetStatus(multimeter)[i]
-    Vms = dmm["events"]["V_m"]
-    tsv = dmm["events"]["times"]
-    ax[0].plot(tsv,Vms, label=i)
-t = np.arange(0, t_sim)
-ax[0].plot(t, [V_th]*len(t), lw=2, ls="--", c="gray")
+# fig, ax = pl.subplots(2, figsize=(12,8), sharex=True)
+# for i in range(0,N, 5):
+#     dmm = nest.GetStatus(multimeter)[i]
+#     Vms = dmm["events"]["V_m"]
+#     tsv = dmm["events"]["times"]
+#     ax[0].plot(tsv,Vms, label=i)
+# t = np.arange(0, t_sim)
+# ax[0].plot(t, [V_th]*len(t), lw=2, ls="--", c="gray")
 
 
-dSD = nest.GetStatus(spikedetector, keys='events')[0]
-evs = dSD['senders']
-ts = dSD["times"]
-ax[1].plot(ts,evs,'.',c='k')
+# dSD = nest.GetStatus(spikedetector, keys='events')[0]
+# evs = dSD['senders']
+# ts = dSD["times"]
+# ax[1].plot(ts,evs,'.',c='k')
 
 # ax[0].legend(frameon=False)
 
-ax[1].set_xlabel("time(ms)", fontsize=20)
-ax[0].set_ylabel("V(mV)", fontsize=16)
-ax[1].set_ylabel("neuron index", fontsize=16)
-ax[0].set_title("%s, I=%.3f pA" % (neuron_model, I_e), fontsize=20)
-ax[0].margins(y=0.1)
-ax[1].margins(y=0.01)
-pl.savefig("../data/fig/02.pdf")
-# pl.show()
+# ax[1].set_xlabel("time(ms)", fontsize=20)
+# ax[0].set_ylabel("V(mV)", fontsize=16)
+# ax[1].set_ylabel("neuron index", fontsize=16)
+# ax[0].set_title("%s, I=%.3f pA" % (neuron_model, I_e), fontsize=20)
+# ax[0].margins(y=0.1)
+# ax[1].margins(y=0.01)
+# pl.savefig("../data/fig/02.pdf")
+
+
+nest.raster_plot.from_device(spikedetector, hist=True)
+pl.show()
