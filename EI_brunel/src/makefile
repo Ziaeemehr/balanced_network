@@ -1,8 +1,3 @@
-
-
-# single : ml_plos.py
-# 		python ml_plos.py
-
 clean:
 	rm -f *.pyc
 	rm -f ../data/*.pdf
@@ -13,7 +8,6 @@ clean:
 
 help:
 	@echo "    clean"
-	@echo "         Remove python artifacts."
 
 
-.phoney: clean #single 
+.phoney: clean
