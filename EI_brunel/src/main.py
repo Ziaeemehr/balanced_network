@@ -15,12 +15,12 @@ from time import time
 from lib import Brunel
 
 
-order  = 2500
+order  = 250
 params = {
-    "nthreads"   : 10,
+    "nthreads"   : 8,
     "dt"         : 0.1,
-    "t_sim"      : 600.0,
-    "t_trans"    : 550.0,
+    "t_sim"      : 300.0,
+    "t_trans"    : 100.0,
     "NE"         : 4 * order,
     "NI"         : 1 * order,
     "delay"      : 1.0,
@@ -44,8 +44,8 @@ params = {
 params["N_rec_E"] = params['NE']
 params["N_rec_I"] = params['NI']
 
-g   =  np.arange(3, 6, 0.1)
-eta = np.arange(1, 4, 0.1)
+g   =  np.arange(3, 6, 1)
+eta = np.arange(1, 4, 1)
 
 
 if __name__ == "__main__":
@@ -57,8 +57,8 @@ if __name__ == "__main__":
             sol = Brunel(params['dt'], params['nthreads'])
             sol.set_params(**params)
             sol.run(params['t_sim'])
-            sol.visualize( 50,
-                xlim=[params['t_trans'], params['t_sim']], 
-                rhythm=True, hist=True, 
-                fwhm=params['fwhm'])
+            # sol.visualize( 50,
+            #     xlim=[params['t_trans'], params['t_sim']], 
+            #     rhythm=True, hist=True, 
+            #     fwhm=params['fwhm'])
 

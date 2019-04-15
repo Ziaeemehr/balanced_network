@@ -28,7 +28,7 @@ class Brunel(object):
 
         nest.SetKernelStatus({
                       "resolution": dt, 
-                      "print_time": True,
+                      "print_time": False,
                       "overwrite_files": True, 
                       "data_path": self.data_path,
                       "local_num_threads": nthreads})
@@ -117,18 +117,19 @@ class Brunel(object):
         self.espikes = nest.Create("spike_detector")
         self.ispikes = nest.Create("spike_detector")
 
-        nest.SetStatus(self.espikes, [{"label": str("E-%.3f-%.3f"%(self.g, self.eta)),
+        nest.SetStatus(self.espikes, [
+                                {"label": str("E-%.3f-%.3f"%(self.g, self.eta)),
                                 "withtime": True,
-                                "withgid": True,
-                                "to_file": True,
+                                "withgid" : True,
+                                "to_file" : False,
                                 "use_gid_in_filename":False}])
 
         nest.SetStatus(self.ispikes, [
-            {"label": str("I-%.3f-%.3f"%(self.g, self.eta)),
-            "withtime": True,
-            "withgid": True,
-            "to_file": True,
-            "use_gid_in_filename":False}])
+                                {"label": str("I-%.3f-%.3f"%(self.g, self.eta)),
+                                "withtime": True,
+                                "withgid" : True,
+                                "to_file" : False,
+                                "use_gid_in_filename":False}])
         node_info = nest.GetStatus(self.nodes_ex+self.nodes_in)
         local_nodes = [(ni['global_id'], ni['vp'])
                     for ni in node_info if ni['local']]
@@ -203,6 +204,23 @@ class Brunel(object):
         print("       Inhibitory : {0}".format(int(self.CI * self.N_neurons)))
         print("Excitatory rate   : %.2f Hz" % rate_ex)
         print("Inhibitory rate   : %.2f Hz" % rate_in)
+
+        path = "../data/npz/"
+        subname = str("%.3f-%.3f"%(self.g, self.eta))
+        e_t, e_gid = get_spike_times(self.espikes)
+        i_t, i_gid = get_spike_times(self.ispikes)
+
+        np.savez(path+"E-"+subname, 
+            t=e_t, 
+            gid=e_gid,
+            rate=rate_ex)
+        np.savez(path+"I-"+subname, 
+            t=i_t, 
+            gid=i_gid,
+            rate=rate_in)
+
+
+
         
     # ---------------------------------------------------------------#
     def my_raster_plot(self, spike_detector, ax, color):
@@ -284,7 +302,20 @@ def raster_plot_from_file(
 
     val = extract_events(ts, gids, sel=sel) 
     make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim)
+# -----------------------------------------------------------------------#
+def raster_plot_from_data( 
+    ts, gids, hist=False, hist_binwidth=5.0,
+    xlim=None, sel=None):
+
+    """
+    Plot raster from data
+    """
     
+    if not len(ts):
+        raise nest.NESTError("No events recorded!")
+
+    val = extract_events(ts, gids, sel=sel) 
+    make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim)
 # -----------------------------------------------------------------------#
 def make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim):
     """
