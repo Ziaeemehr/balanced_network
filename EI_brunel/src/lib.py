@@ -1,9 +1,10 @@
+import os
 import nest 
-import nest.raster_plot
+import numpy as np
 import pylab as pl 
 from time import time 
-import numpy as np
-import os
+import nest.raster_plot
+pl.switch_backend('agg')
 
 class Brunel(object):
     '''
@@ -13,14 +14,14 @@ class Brunel(object):
     state (AI).
     '''
 
-    data_path = "../data/text/"
+    data_path = "../data/text"
     built = False       # True, if build() was called
     connected = False   # True, if connect() was called
 
     def __init__(self, dt, nthreads):
         self.name = self.__class__.__name__
         nest.ResetKernel()
-        # nest.set_verbosity('M_QUIET')
+        nest.set_verbosity('M_QUIET')
 
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
@@ -66,6 +67,7 @@ class Brunel(object):
         self.J                  = par['J']
         self.I_e                = par["I_e"]
         self.neuron_model       = par['neuron_model']
+        self.hist_binwidth      = par['hist_binwidth']
 
         
         self.neuron_params = {
@@ -95,7 +97,6 @@ class Brunel(object):
         nu_ex = self.eta * nu_th
         p_rate = 1000.0 * nu_ex * self.CE
 
-
         nest.SetDefaults("iaf_psc_delta", self.neuron_params)
         nest.SetDefaults("poisson_generator", {"rate": p_rate})
 
@@ -116,15 +117,18 @@ class Brunel(object):
         self.espikes = nest.Create("spike_detector")
         self.ispikes = nest.Create("spike_detector")
 
-        nest.SetStatus(self.espikes, [{"label": "brunel-py-ex",
+        nest.SetStatus(self.espikes, [{"label": str("E-%.3f-%.3f"%(self.g, self.eta)),
                                 "withtime": True,
                                 "withgid": True,
-                                "to_file": True}])
+                                "to_file": True,
+                                "use_gid_in_filename":False}])
 
-        nest.SetStatus(self.ispikes, [{"label": "brunel-py-in",
-                                "withtime": True,
-                                "withgid": True,
-                                "to_file": True}])
+        nest.SetStatus(self.ispikes, [
+            {"label": str("I-%.3f-%.3f"%(self.g, self.eta)),
+            "withtime": True,
+            "withgid": True,
+            "to_file": True,
+            "use_gid_in_filename":False}])
         node_info = nest.GetStatus(self.nodes_ex+self.nodes_in)
         local_nodes = [(ni['global_id'], ni['vp'])
                     for ni in node_info if ni['local']]
@@ -191,7 +195,7 @@ class Brunel(object):
 
         num_synapses = (nest.GetDefaults("excitatory")["num_connections"] +
                         nest.GetDefaults("inhibitory")["num_connections"])
-
+        print "*" *70
         print("Brunel network simulation (Python)")
         print("Number of neurons : {0}".format(self.N_neurons))
         print("Number of synapses: {0}".format(num_synapses))
@@ -200,136 +204,7 @@ class Brunel(object):
         print("Excitatory rate   : %.2f Hz" % rate_ex)
         print("Inhibitory rate   : %.2f Hz" % rate_in)
         
-
-
-    def visualize(self, tlimits):
-        '''
-        plot rasterplots
-        '''
-        
-        # NE = self.NE
-        # NI = self.NI
-
-        # pl.figure()
-        # nest.raster_plot.from_device(
-        #     self.espikes, 
-        #     hist=True, 
-        #     title="Excitatory",
-        #     grayscale=False)
-        # pl.savefig("../data/fig/E.pdf")
-        # pl.close()
-
-        # pl.figure()
-        # nest.raster_plot.from_device(
-        #     self.spikes_inh,
-        #     hist=True,
-        #     title="Inhibitory",
-        #     grayscale=True)
-        # pl.savefig("../data/fig/I.pdf")
-
-        # fig, ax = pl.subplots(1, figsize=(15,10))
-        # self.my_raster_plot(self.espikes, ax, 'k' )
-        # self.my_raster_plot(self.ispikes, ax, 'r')
-        # pl.show()
-
-        # nest.raster_plot.from_device(self.espikes, hist=True)
-        # pl.show()
-        self.raster_plot_from_device(self.espikes, hist=True)
-        pl.savefig("../data/fig/E.pdf")
-        # pl.show()
-
-        pl.figure()
-        self.raster_plot_from_device(self.ispikes, hist=True)
-        pl.savefig("../data/fig/I.pdf")
-
-
-
-
-
-    
-    # -------------------------------------------------------------------#
-    def raster_plot_from_device(self, 
-        detec, hist=False, hist_binwidth=5.0):
-
-        # ---------------------------------------------------------------#
-        def _histogram(a, bins=10, bin_range=None, normed=False):
-            from numpy import asarray, iterable, linspace, sort, concatenate
-
-            a = asarray(a).ravel()
-
-            if bin_range is not None:
-                mn, mx = bin_range
-                if mn > mx:
-                    raise ValueError("max must be larger than min in range parameter")
-
-            if not iterable(bins):
-                if bin_range is None:
-                    bin_range = (a.min(), a.max())
-                mn, mx = [mi + 0.0 for mi in bin_range]
-                if mn == mx:
-                    mn -= 0.5
-                    mx += 0.5
-                bins = linspace(mn, mx, bins, endpoint=False)
-            else:
-                if (bins[1:] - bins[:-1] < 0).any():
-                    raise ValueError("bins must increase monotonically")
-
-            # best block size probably depends on processor cache size
-            block = 65536
-            n = sort(a[:block]).searchsorted(bins)
-            for i in range(block, a.size, block):
-                n += sort(a[i:i + block]).searchsorted(bins)
-            n = concatenate([n, [len(a)]])
-            n = n[1:] - n[:-1]
-
-            if normed:
-                db = bins[1] - bins[0]
-                return 1.0 / (a.size * db) * n, bins
-            else:
-                return n, bins
-
-        # ---------------------------------------------------------------#
-        if nest.GetStatus(detec, "to_memory")[0]:
-            if not nest.GetStatus(detec)[0]["model"] == "spike_detector":
-                raise nest.NESTError("Please provide a spike_detector.")
-            
-            ev = nest.GetStatus(detec, "events")[0]
-            ts = ev["times"]
-            gids = ev["senders"]
-        
-        else:
-            raise nest.NESTError("No data to plot. Make sure that to_memory is set.")
-        
-
-        if not len(ts):
-            raise nest.NESTError("No events recorded!")
-
-        if hist:
-            ax1 = pl.axes([0.1, 0.3, 0.85, 0.6])
-            plotid = pl.plot(ts, gids, '.')
-            pl.ylabel("Time (ms)")
-            pl.xticks([])
-            xlim = pl.xlim()
-
-            pl.axes([0.1, 0.1, 0.85, 0.17])
-            t_bins = np.arange(
-                np.amin(ts), 
-                np.amax(ts), 
-                float(hist_binwidth))
-            n, bins = _histogram(ts, bins=t_bins)
-            num_neurons = len(np.unique(gids))
-            heights = 1000 * n / (hist_binwidth * num_neurons)
-            pl.bar(t_bins, heights, width=hist_binwidth, color='royalblue', edgecolor='black')
-            pl.yticks([int(x) for x in np.linspace(0.0, int(max(heights) * 1.1) + 5, 4)])
-            pl.ylabel("Rate (Hz)")
-            pl.xlabel("Time (ms)")
-            pl.xlim(xlim)
-            pl.axes(ax1)
-        else:
-            plotid = pl.plot(ts, gids, '.')
-            pl.xlabel("Time (ms)")
-            pl.ylabel("Neuron ID")
-    # -------------------------------------------------------------------#
+    # ---------------------------------------------------------------#
     def my_raster_plot(self, spike_detector, ax, color):
             dSD = nest.GetStatus(spike_detector, keys='events')[0]
             evs = dSD['senders']
@@ -339,3 +214,260 @@ class Brunel(object):
             ax.set_ylabel("Neuron ID", fontsize=18)
             ax.tick_params(labelsize=18)
             return (evs, tsd)
+    # -------------------------------------------------------------------#
+    def visualize(self, n=50, hist=False, rhythm=False, fwhm=4, xlim=None):
+        '''
+        plot rasterplots
+        '''
+        print "plotting ..."
+        
+        subname = str("%.3f-%.3f"%(self.g, self.eta))
+        path = "../data/fig/"
+
+
+        if hist:        
+            raster_plot_from_device(self.espikes, hist=hist, 
+                hist_binwidth=self.hist_binwidth,
+                xlim=xlim, sel=range(n))
+            pl.savefig(path+'E-'+subname+'.png')
+            pl.close()
+            
+            raster_plot_from_device(self.ispikes, hist=hist, 
+                hist_binwidth=self.hist_binwidth,
+                xlim=xlim, sel=range(self.NE, self.NE+n))
+            pl.savefig(path+'I-'+subname+'.png')
+            pl.close()
+        
+        if rhythm:
+            fig0, ax0 = pl.subplots(1, figsize=(10,5))
+            plot_rhythms(self.espikes, ax0, 
+                fwhm=fwhm, hist_binwidth=self.hist_binwidth)
+            pl.savefig(path+'r-'+subname+'.png')
+            pl.close()
+   
+    # -------------------------------------------------------------------#
+def raster_plot_from_device( 
+    detec, hist=False, hist_binwidth=5.0,
+    xlim=None, sel=None):
+
+    ts, gids = get_spike_times(detec)
+
+    val = extract_events(ts, gids, sel=sel) 
+    # t  = val[:,1]
+    # gs = val[:,0]
+    if not len(ts):
+        raise nest.NESTError("No events recorded!")
+    
+    make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim)
+# -----------------------------------------------------------------------#
+def raster_plot_from_file( 
+    fname, hist=False, hist_binwidth=5.0,
+    xlim=None, sel=None):
+
+    """
+    Plot raster from file
+    """
+    if nest.is_iterable(fname):
+        data = None
+        for f in fname:
+            if data is None:
+                data = np.loadtxt(f)
+            else:
+                data = np.concatenate((data, np.loadtxt(f)))
+    else:
+        data = np.loadtxt(fname)
+    
+    ts = data[:,1]
+    gids = data[:,0]
+    if not len(ts):
+        raise nest.NESTError("No events recorded!")
+
+    val = extract_events(ts, gids, sel=sel) 
+    make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim)
+    
+# -----------------------------------------------------------------------#
+def make_plot(ts, gids, val, hist, hist_binwidth, sel, xlim):
+    """
+    Generic plotting routine that constructs a raster plot along with
+    an optional histogram (common part in all routines above)
+    """
+
+    import matplotlib.gridspec as gridspec
+    fig = pl.figure(figsize=(12, 9))
+    gs1 = gridspec.GridSpec(4, 1, hspace=0.1)
+    axs = []
+    
+    xlabel = "Time (ms)"
+    ylabel = "Neuron ID"
+    if xlim==None:
+        xlim = pl.xlim()
+
+    if hist:
+        axs.append(fig.add_subplot(gs1[0:3]))
+        axs.append(fig.add_subplot(gs1[3]))
+
+        axs[0].plot(val[:,1], val[:,0], '.')
+        axs[0].set_ylabel(ylabel)
+        axs[0].set_xticks([])
+        axs[0].set_xlim(xlim)
+
+        t_bins = np.arange(
+            np.amin(ts), 
+            np.amax(ts), 
+            float(hist_binwidth))
+        n, bins = histogram(ts, bins=t_bins)
+        num_neurons = len(np.unique(gids))
+        heights = 1000 * n / (hist_binwidth * num_neurons)
+        axs[1].bar(t_bins, heights, width=hist_binwidth, color='royalblue', edgecolor='black')
+        axs[1].set_yticks([int(x) for x in np.linspace(0.0, int(max(heights) * 1.1) + 5, 4)])
+        axs[1].set_ylabel("Rate (Hz)")
+        axs[1].set_xlabel(xlabel)
+        axs[1].set_xlim(xlim)
+    # else:
+    #     axs.append(fig.add_subplot(gs1[:]))
+
+    #     axs[0].plot(val[:,1], val[:,0], '.')
+    #     axs[0].set_xlabel(xlabel)
+    #     axs[0].set_ylabel(ylabel)
+# -------------------------------------------------------------------#
+def histogram(a, bins=10, bin_range=None, normed=False):
+    from numpy import asarray, iterable, linspace, sort, concatenate
+
+    a = asarray(a).ravel()
+
+    if bin_range is not None:
+        mn, mx = bin_range
+        if mn > mx:
+            raise ValueError("max must be larger than min in range parameter")
+
+    if not iterable(bins):
+        if bin_range is None:
+            bin_range = (a.min(), a.max())
+        mn, mx = [mi + 0.0 for mi in bin_range]
+        if mn == mx:
+            mn -= 0.5
+            mx += 0.5
+        bins = linspace(mn, mx, bins, endpoint=False)
+    else:
+        if (bins[1:] - bins[:-1] < 0).any():
+            raise ValueError("bins must increase monotonically")
+
+    # best block size probably depends on processor cache size
+    block = 65536
+    n = sort(a[:block]).searchsorted(bins)
+    for i in range(block, a.size, block):
+        n += sort(a[i:i + block]).searchsorted(bins)
+    n = concatenate([n, [len(a)]])
+    n = n[1:] - n[:-1]
+
+    if normed:
+        db = bins[1] - bins[0]
+        return 1.0 / (a.size * db) * n, bins
+    else:
+        return n, bins
+# ---------------------------------------------------------------#
+def plot_rhythms(detec, ax, fwhm, hist_binwidth=5.0):
+    
+    from scipy.ndimage.filters import gaussian_filter1d
+    
+    def fwhm2sigma(fwhm):
+        return fwhm / np.sqrt(8 * np.log(2))
+
+
+    ts, gids = get_spike_times(detec)
+    t_bins = np.arange(
+        np.amin(ts), 
+        np.amax(ts), 
+        float(hist_binwidth))
+    n, bins = histogram(ts, bins=t_bins)
+    num_neurons = len(np.unique(gids))
+    heights = 1000 * n / (hist_binwidth * num_neurons)
+    ax.bar(t_bins, heights, width=hist_binwidth, color='royalblue', 
+        edgecolor='black', alpha=0.1)
+    ax.set_yticks([int(x) for x in np.linspace(0.0, int(max(heights) * 1.1) + 5, 4)])
+    ax.set_ylabel("Rate (Hz)")
+    
+    sigma = fwhm2sigma(fwhm)
+    filtered = gaussian_filter1d(heights, sigma, mode='reflect')
+    ax.plot(t_bins, filtered, marker='o', markersize=1, c='k', label='conv')
+    pl.legend(frameon=False)
+    pl.xlabel("Time (ms)")
+
+
+# ---------------------------------------------------------------#
+def get_spike_times(detec):
+    if nest.GetStatus(detec, "to_memory")[0]:
+        if not nest.GetStatus(detec)[0]["model"] == "spike_detector":
+            raise nest.NESTError("Please provide a spike_detector.")
+        
+        ev = nest.GetStatus(detec, "events")[0]
+        ts = ev["times"]
+        gids = ev["senders"]
+    
+    else:
+        raise nest.NESTError("No data to plot. Make sure that to_memory is set.")
+    return ts, gids       
+# ---------------------------------------------------------------#
+def extract_events(ts, gids, time=None, sel=None):
+    """
+    Extracts all events within a given time interval or are from a
+    given set of neurons.
+    - data is a matrix such that
+      
+    - time is a list with at most two entries such that
+      time=[t_max] extracts all events with t< t_max
+      time=[t_min, t_max] extracts all events with t_min <= t < t_max
+    - sel is a list of gids such that
+      sel=[gid1, ... , gidn] extracts all events from these gids.
+      All others are discarded.
+    Both time and sel may be used at the same time such that all
+    events are extracted for which both conditions are true.
+    """
+
+    val = []
+
+    if time:
+        t_max = time[-1]
+        if len(time) > 1:
+            t_min = time[0]
+        else:
+            t_min = 0
+
+    for t, gid in zip(ts, gids):
+        
+        if time and (t < t_min or t >= t_max):
+            continue
+        if not sel or gid in sel:
+            val.append([gid, t])
+
+    return np.array(val)
+
+
+
+# NE = self.NE
+# NI = self.NI
+
+# pl.figure()
+# nest.raster_plot.from_device(
+#     self.espikes, 
+#     hist=True, 
+#     title="Excitatory",
+#     grayscale=False)
+# pl.savefig("../data/fig/E.pdf")
+# pl.close()
+
+# pl.figure()
+# nest.raster_plot.from_device(
+#     self.spikes_inh,
+#     hist=True,
+#     title="Inhibitory",
+#     grayscale=True)
+# pl.savefig("../data/fig/I.pdf")
+
+# fig, ax = pl.subplots(1, figsize=(15,10))
+# self.my_raster_plot(self.espikes, ax, 'k' )
+# self.my_raster_plot(self.ispikes, ax, 'r')
+# pl.show()
+
+# nest.raster_plot.from_device(self.espikes, hist=True)
+# pl.show()

@@ -31,3 +31,4 @@ prog
 *.npz
 *.adjlist
 *.graphml
+*.gdf
