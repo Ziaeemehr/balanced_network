@@ -181,24 +181,32 @@ class Brunel(object):
 
         self.connected = True
 
-    def run(self, simtime=300):
+    def run(self):
         '''
         Simulate the model for simtime milliseconds and print the firing 
         rates of the network during this period.
         '''
+
         if not self.connected:
             self.connect()
-        nest.Simulate(simtime)
+
+        nest.Simulate(self.t_trans)
+
+        nest.SetStatus(self.espikes, {'n_events': 0})
+        nest.SetStatus(self.ispikes, {'n_events': 0})
+
+        nest.Simulate(self.t_sim)
 
         events_ex = nest.GetStatus(self.espikes, "n_events")[0]
         events_in = nest.GetStatus(self.ispikes, "n_events")[0]
 
-        rate_ex = events_ex / simtime * 1000.0 / self.N_rec_E
-        rate_in = events_in / simtime * 1000.0 / self.N_rec_I
+        rate_ex = events_ex / self.t_sim * 1000.0 / self.N_rec_E
+        rate_in = events_in / self.t_sim * 1000.0 / self.N_rec_I
 
         num_synapses = (nest.GetDefaults("excitatory")["num_connections"] +
                         nest.GetDefaults("inhibitory")["num_connections"])
-        # print "*" * 70
+
+        # print "*" * 50
         # print("Brunel network simulation (Python)")
         # print("Number of neurons : {0}".format(self.N_neurons))
         # print("Number of synapses: {0}".format(num_synapses))
@@ -458,25 +466,6 @@ def calculate_histogram(ts, gids, hist_binwidth):
 # ---------------------------------------------------------------#
 
 
-def calculate_histogram_(ts, gids, hist_binwidth):
-    '''
-    same as calculate_histogram function
-    '''
-
-    t_bins = np.arange(
-        np.amin(ts),
-        np.amax(ts),
-        float(hist_binwidth))
-
-    ts = np.sort(ts)
-    n, bins = np.histogram(ts, bins=t_bins)
-    num_neurons = len(np.unique(gids))
-    heights = 1000 * n / (hist_binwidth * num_neurons)
-
-    return t_bins[1:], heights
-# ---------------------------------------------------------------#
-
-
 def filter_gaussian(signal, fwhm):
 
     def fwhm2sigma(fwhm):
@@ -493,8 +482,8 @@ def plot_rhythms_from_file(
         t_bins, heights, filtered,
         ax=None, xlim=None,  title=None):
 
-    ax.plot(t_bins, heights, color='royalblue', alpha=0.5, label="signal")
-    ax.plot(t_bins, filtered, lw=1, c='k', label='gaussian')
+    ax.plot(t_bins, heights, color='royalblue', alpha=0.5, label="activity")
+    ax.plot(t_bins, filtered, lw=1, c='k', label='filtered')
 
     ax.set_yticks([int(x) for x in np.linspace(
         0.0, int(max(heights) * 1.1) + 5, 4)])
@@ -510,7 +499,7 @@ def plot_rhythms_from_file(
 
     ax.set_ylabel("Rate (Hz)")
     ax.set_xlabel("Time (ms)")
-    ax.legend()
+    ax.legend(loc='upper right')
 
     # pl.legend(frameon=False)
 # ---------------------------------------------------------------#

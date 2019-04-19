@@ -15,12 +15,12 @@ import pylab as pl
 from time import time 
 
 
-order  = 250
+order  = 254
 params = {
     "nthreads"   : 8,
     "dt"         : 0.1,
     "t_sim"      : 10000.0,
-    "t_trans"    : 5000.0,
+    "t_trans"    : 1000.0,
     "NE"         : 4 * order,
     "NI"         : 1 * order,
     "delay"      : 1.0,
@@ -47,8 +47,8 @@ params["N_rec_I"] = params['NI']
 # g   = np.arange( 3, 6, .5 )
 # eta = np.arange( 1, 6, 0.5 )
 
-g   = [3.5]#np.arange( 3, 4, .1 )
-eta = [1.8]#np.arange( 1, 2, 0.1 )
+g   = [2.0]#np.arange( 2, 6.1, 0.1 )
+eta = [0.9]#np.arange( 0.9, 5.1, 0.1 )
 
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
             params['eta'] = j
             sol = lib.Brunel(params['dt'], params['nthreads'])
             sol.set_params(**params)
-            sol.run(params['t_sim'])
+            sol.run()
             # sol.visualize( 50,
             #     xlim=[params['t_trans'], params['t_sim']], 
             #     rhythm=True, hist=True, 
