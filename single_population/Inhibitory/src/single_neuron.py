@@ -21,14 +21,14 @@ params = {
     'neuron_model': 'iaf_psc_alpha',
 }
 
-I_e = np.arange(360, 385, 1.0, dtype=float)
-std_noise = np.arange(10.0, 50.0, 1.0, dtype=float)
+I_e = np.arange(360, 380, 1.0, dtype=float)
+std_noise = np.arange(10.0, 40.0, 1.0, dtype=float)
 
 
 if __name__ == "__main__":
 
     t_start = time()
-    
+
     dt = 0.1
     n_I = len(I_e)
     n_s = len(std_noise)
@@ -46,7 +46,7 @@ if __name__ == "__main__":
             params['std_noise'] = std_noise[s]
             sol = lib.single_iaf_neuron(dt)
             sol.set_params(**params)
-            sol.run()
+            sol.run(True)
             n_spikes[i, s] = len(sol.ts)
             if len(sol.ts) > 10:
                 t_isi = lib.isi(sol.ts, sol.gids)
@@ -59,4 +59,4 @@ if __name__ == "__main__":
              std_noise=std_noise,
              n_spikes=n_spikes)
 
-    lib.display_time(time()- t_start)
+    lib.display_time(time() - t_start)

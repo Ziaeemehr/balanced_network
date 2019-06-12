@@ -7,7 +7,7 @@
 from time import time
 from run import N, I_e, dt, t_sim, t_trans
 from run import num_sim, nthreads
-from lib import iaf_neuron
+from lib import pop_iaf_neuron
 from sys import exit, argv
 import networkx as nx
 import pylab as pl
@@ -21,11 +21,11 @@ node_coupling = float(argv[1])
 noise_weight = float(argv[2])
 mean_noise = float(argv[3])
 std_noise = float(argv[4])
-tau_syn_ex = float(argv[5])
+tau_syn_in = float(argv[5])
 delay = float(argv[6])
+vol_step = int(argv[7])
 
-vol_step = 1
-adj = np.loadtxt('dat/C.dat', dtype=int)
+adj = np.loadtxt('dat/C.txt', dtype=int)
 
 params = {
     'N': N,
@@ -38,7 +38,7 @@ params = {
     'nthreads': nthreads,
     'vol_step': vol_step,
     'std_noise': std_noise,
-    'tau_syn_ex': tau_syn_ex,
+    'tau_syn_in': tau_syn_in,
     'mean_noise': mean_noise,
     'noise_weight': noise_weight,
     'weight_coupling': node_coupling,
@@ -48,12 +48,13 @@ params = {
 # ---------------------------------------------------------#
 
 ofname = str('par-%.6f-%.6f-%.6f-%.6f' % (
-    node_coupling, std_noise, tau_syn_ex, delay))
+    node_coupling, std_noise, tau_syn_in, delay))
 
 for ens in range(num_sim):
-    sol = iaf_neuron(dt, nthreads)
+    sol = pop_iaf_neuron(dt, nthreads)
     sol.set_params(**params)
-    sol.run()
+    sol.run(spike_to_npz=True,
+            voltage_to_npz=True)
 
 
 # print '%15.5f %15.5f %15.5f %15.5f' % (

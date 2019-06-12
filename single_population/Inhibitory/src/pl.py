@@ -4,11 +4,12 @@ import numpy as np
 import pylab as pl
 from sys import exit
 from time import time
+from cycler import cycler
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from scipy.signal import welch, filtfilt
 from scipy.signal import butter, hilbert
-from run import weight_coupling, tau_syn_ex
+from run import weight_coupling, tau_syn_in
 from run import N, t_trans, t_sim, dt, I_e, std_noise
 
 path = "../data/"
@@ -86,9 +87,10 @@ def plot_raster_fast(fname, ax):
             indices = np.where(gids == ii)
             spikes = ts[indices]
             ax.plot(spikes, [ii]*len(spikes), '.',
-                    c=colors[R], markersize=3)
+                    c=colors[R], markersize=8)
     else:
         print "empty plot for %s" % fname
+# -----------------------------------------------------------------------#
 
 
 def plot_rhythm(g, sigma, PLOT=False):
@@ -285,39 +287,45 @@ def plot_phase_space(R, X, Y, name="R", xtickstep=1, ytickstep=1,
 # -----------------------------------------------------------------------#
 
 
-def plot_spike_synchrony(g, sigma, xtickstep=1, ytickstep=1):
+def plot_spike_synchrony(g, sigma, tau,
+                         xtickstep=1, ytickstep=1,
+                         xlabel=None, ylabel=None):
 
-    len_g, len_sigma = len(g), len(sigma)
-    R = np.zeros((len(g), len(sigma)))
+    len_g, len_sigma, len_tau = len(g), len(sigma), len(tau)
 
-    # fig0, ax = pl.subplots(1, figsize=(5, 5))
-    for i in range(len_g):
-        for j in range(len_sigma):
+    for j in range(len_sigma):
+        R = np.zeros((len_tau, len_g))
+        for k in range(len_tau):
+            for i in range(len_g):
 
-            subname = str("%.3f-%.3f" % (g[i], sigma[j]))
-            fname = str("spk-%s.npz" % subname)
-            pop = np.load("npz/"+fname)
+                subname = str("%.3f-%.3f-%.3f" % (g[i], sigma[j], tau[k]))
+                fname = str("spk-%s.npz" % subname)
+                pop = np.load("npz/"+fname)
 
-            ts = pop['ts']
-            gids = pop['gids']
+                ts = pop['ts']
+                gids = pop['gids']
 
-            if len(ts):
-                tmp = lib.calculate_spike_synchrony(ts, gids)
-                R[i, j] = 0 if ((tmp > 1) or (tmp < 0)) else tmp
-                if tmp > 1:
-                    print "%.2f %.2f %10d, %15.4f" % (
-                        g[i], sigma[j], len(ts), tmp)
-    plot_phase_space(R, sigma, g, "R",
-                     xtickstep=xtickstep,
-                     ytickstep=ytickstep,
-                     xlabel=r"$\sigma$",
-                     ylabel='g')
+                if len(ts):
+                    tmp = lib.calculate_spike_synchrony(ts, gids)
+                    R[k, i] = 0 if ((tmp > 1) or (tmp < 0)) else tmp
+                    if tmp > 1:
+                        print "%.2f %.2f %.2f %10d, %15.4f" % (
+                            g[i], sigma[j], tau[k], len(ts), tmp)
+        plot_phase_space(R.T, tau, g, "R-"+str("%.3f" % sigma[j]),
+                         xtickstep=xtickstep,
+                         ytickstep=ytickstep,
+                         ylabel=ylabel,
+                         xlabel=xlabel)
 
-    np.savez("npz/R.npz", R=R, g=g, sigma=sigma)
+        np.savez("npz/R-"+str("%.3f" % sigma[j])+".npz",
+                 R=R,
+                 g=g,
+                 tau=tau,
+                 sigma=sigma)
 # -----------------------------------------------------------------------#
 
 
-def plot_bunch_rasters_activity(g, sigma):
+def plot_bunch_rasters_activity(g, sigma, xlim=None):
 
     len_g = len(g)
     len_sigma = len(sigma)
@@ -338,9 +346,11 @@ def plot_bunch_rasters_activity(g, sigma):
             plot_activity(fname, fwhm, axs[1])
             axs[0].set_xticks([])
             axs[0].axis('off')
-            axs[1].set_ylim(0, 300)
-            # axs[0].set_xlim(t_sim-500, t_sim)
-            # axs[1].set_xlim(t_sim-500, t_sim)
+            if xlim:
+                axs[0].set_xlim(xlim)
+                axs[1].set_xlim(xlim)
+
+            # axs[1].set_ylim(0, 300)
             # axs[1].axis('off')
             pl.savefig("fig/spk-"+subname+".png")
             pl.close()
@@ -418,6 +428,129 @@ def plot_map_raster_activity(g, sigma):
              fontsize=40)
     pl.savefig("fig/spk.png")
     # pl.savefig("fig/spk.pdf")
+# -----------------------------------------------------------------------#
+
+
+def plot_voltage(fname, ax):
+
+    c = np.load('npz/'+fname)
+    t = c['t']
+    v = c['v']
+    # for i in range(N):
+    #     ax.plot(t, v[i, :], lw=1)
+    ax.plot(t, v, lw=2, c='k')
+# -----------------------------------------------------------------------#
+
+
+def plot_I_syn(fname, ax):
+
+    c = np.load('npz/'+fname)
+    t = c['t']
+    I = c['I_syn_in']
+    ax.plot(t, I, lw=2, c='k')
+# -----------------------------------------------------------------------#
+
+
+def plot_raster_voltage_Isyn(g, sigma, tau, xlim=None):
+    len_g = len(g)
+    len_sigma = len(sigma)
+    len_tau = len(tau)
+    for j in range(len_sigma):
+        for i in range(len_g):
+            for k in range(len_tau):
+
+                fig = pl.figure(figsize=(6, 6))
+                gs1 = gridspec.GridSpec(5, 1, hspace=0.0)
+                axs = []
+                axs.append(fig.add_subplot(gs1[:3]))
+                axs.append(fig.add_subplot(gs1[3]))
+                axs.append(fig.add_subplot(gs1[4]))
+
+                subname = str("%.3f-%.3f-%.3f" % (g[i], sigma[j], tau[k]))
+                spkname = str("spk-%s.npz" % subname)
+                vname = str("v-%s.npz" % subname)
+                plot_raster_fast(spkname, axs[0])
+
+                plot_voltage(vname, axs[1])
+                plot_I_syn(vname, axs[2])
+
+                axs[0].set_xticks([])
+                axs[0].axis('off')
+                # axs[1].set_ylim(0, 300)
+                for ii in range(3):
+                    if xlim:
+                        axs[ii].set_xlim(xlim)
+                    else:
+                        axs[ii].set_xlim(t_trans, t_trans + t_sim)
+                axs[2].set_xlabel("Time (ms)")
+                axs[1].set_ylabel(r"$V_{global}$")
+                axs[2].set_ylabel(r"$I_{syn}$")
+                # axs[1].axis('off')
+                pl.tight_layout()
+                pl.savefig("fig/spk_v-"+subname+".png")
+                pl.close()
+# -----------------------------------------------------------------------#
+
+
+def plot_map_raster_voltage(g, sigma, tau, xlim=None, title=None):
+
+    g = g[::-1]
+    len_g = len(g)
+    len_tau = len(tau)
+    len_sigma = len(sigma)
+    R = 0
+
+    print len_g, len_tau, len_sigma
+
+    fig = pl.figure(figsize=(40, 30))
+    # pl.title(title, fontsize=40)
+    outer = gridspec.GridSpec(len_g, len_tau, wspace=0.05, hspace=0.02)
+
+    subnames = []
+    glabels = []
+    for i in range(len_g):
+        for k in range(len_tau):
+            subname = str("%.3f-%.3f-%.3f" % (g[i], sigma[0], tau[k]))
+            subnames.append(subname)
+            glabels.append(str('%.1f' % g[i]))
+
+    tlabels = tau
+    for i in range(len_g*len_tau):
+        inner = gridspec.GridSpecFromSubplotSpec(
+            2, 1,
+            subplot_spec=outer[i],
+            wspace=0.0,
+            hspace=0.0)
+
+        fname = str("spk-%s.npz" % subnames[i])
+        vname = str("v-%s.npz" % subnames[i])
+
+        for j in range(2):
+            ax = pl.Subplot(fig, inner[j])
+            if j == 0:
+                plot_raster_fast(fname, ax)
+            else:
+                plot_voltage(vname, ax)
+                # plot_I_syn(vname, ax)
+                # ax.set_ylim(-8, 1)
+                ax.set_ylim(-58, -55)
+
+            if xlim:
+                ax.set_xlim(xlim)
+            # ax.axis('off')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            fig.add_subplot(ax)
+
+            if (i+1) > ((len_g-1)*len_tau) and j == 1:
+                ax.set_xlabel(tlabels[i % (len_tau)], fontsize=20)
+            if ((i % len_tau) == 0) and j == 0:
+                ax.set_ylabel(glabels[i], fontsize=20)
+
+    fig.text(0.5, 0.07, r'$\tau_{syn}$', ha='center', fontsize=45)
+    fig.text(0.07, 0.5, r'$g_{syn}$', va='center', fontsize=45)
+    fig.text(0.5, 0.9, title, ha='center', fontsize=45)
+    pl.savefig("fig/spk-"+str('%.3f' % sigma[0])+".png")
 
 
 # -----------------------------------------------------------------------#
@@ -435,14 +568,35 @@ nperseg = 2**13
 if __name__ == "__main__":
 
     start = time()
-    g = weight_coupling[::2]
-    sigma = std_noise
+    # g = weight_coupling[::2]
+    # sigma = std_noise
 
+    # plot_raster_voltage_Isyn(weight_coupling[::1],
+    #                          std_noise,
+    #                          tau_syn_in[::1],
+    #                          xlim=(t_trans + t_sim - 500.0,
+    #                                t_trans + t_sim))
+    for s in std_noise[1:]:
+        plot_map_raster_voltage(
+            weight_coupling[1::1],
+            [s],
+            tau_syn_in[::2],
+            xlim=(t_trans + t_sim - 500.0,
+                  t_trans + t_sim),
+            # title=str(r"$\sigma=$%.2f, raster, $I_{Syn}$" % s),
+            title=str(r"$\sigma=$%.2f, raster, $V_{glob}$" % s))
     # plot_bunch_rasters_activity(g, sigma)
-    plot_map_raster_activity(g, sigma)
+    # plot_map_raster_activity(g, sigma)
 
-    # plot_spike_synchrony(weight_coupling, std_noise,
-    #                      xtickstep=10, ytickstep=10)
+    # plot_spike_synchrony(weight_coupling,
+    #                      std_noise,
+    #                      tau_syn_in,
+    #                      xtickstep=2,
+    #                      ytickstep=2,
+    #                      xlabel='tau',
+    #                      ylabel='g')
+    #  ylabel=r"$g_{syn}$",
+    #  xlabel=r"$\tau$")
     # plot_rhythm(g, sigma, True)
     # plot_firing_rate(g, eta, 1, 1)
     # plot_frequeicy(xtickstep=10, ytickstep=10,

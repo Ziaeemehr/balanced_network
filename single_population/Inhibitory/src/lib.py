@@ -4,6 +4,7 @@
 # tel: +98 3315 2148
 # github.com/ziaeemehr
 
+import os
 import sys
 import nest
 import pylab as pl
@@ -23,6 +24,8 @@ sys.argv.append('--quiet')
 
 seed = 1256
 np.random.seed(seed)
+if not os.path.exists('dat'):
+    os.makedirs('dat')
 # ---------------------------------------------------------------#
 
 
@@ -74,7 +77,7 @@ class single_iaf_neuron(object):
         self.multimeter = nest.Create("multimeter")
 
         nest.SetStatus(self.multimeter, {"withtime": True,
-                                    "record_from": ["V_m"]})
+                                         "record_from": ["V_m"]})
 
         self.noise = nest.Create('noise_generator')
         nest.SetStatus(self.noise, [{'mean': self.mean_noise,
@@ -117,13 +120,14 @@ class single_iaf_neuron(object):
         if to_npz:
             path = "../data/npz/"
             subname = str('%.3f-%.3f' % (
-                self.weight_coupling, self.std_noise))
+                self.I_e, self.std_noise))
             np.savez(path+"spk-"+subname, ts=self.ts, gids=self.gids)
 
 # ---------------------------------------------------------------#
+# ---------------------------------------------------------------#
 
 
-class iaf_neuron(object):
+class pop_iaf_neuron(object):
     """
     iaf_psc_alpha - Leaky integrate-and-fire neuron model
     """
@@ -164,7 +168,7 @@ class iaf_neuron(object):
         self.neuron_model = par['neuron_model']
         self.noise_weight = par['noise_weight']
         self.mean_noise = par['mean_noise']
-        self.tau_syn_ex = par['tau_syn_ex']
+        self.tau_syn_in = par['tau_syn_in']
         self.std_noise = par['std_noise']
         self.vol_step = par['vol_step']
         self.num_sim = par['num_sim']
@@ -187,7 +191,7 @@ class iaf_neuron(object):
         self.neurons = nest.Create(self.neuron_model, self.N)
         nest.SetStatus(
             self.neurons, {'I_e': self.I_e,
-                           "tau_syn_ex": self.tau_syn_ex})
+                           "tau_syn_in": self.tau_syn_in})
 
         # self.dc = nest.Create("poisson_generator")
 
@@ -207,20 +211,21 @@ class iaf_neuron(object):
         #     for gid in self.neurons:
         #         nest.SetStatus([gid], {'V_m': np.random.uniform(-70, -56.0)})
 
-        # self.multimeters = nest.Create("multimeter", self.N)
-        # nest.SetStatus(self.multimeters,
-        #                {"withtime": True,
-        #                 "interval": (self.vol_step * self.dt),
-        #                 "record_from": ["V_m"]})
+        self.multimeters = nest.Create("multimeter", self.N)
+        nest.SetStatus(self.multimeters,
+                       {"withtime": True,
+                        "interval": (self.vol_step * self.dt),
+                        "record_from": ["V_m",
+                                        "I_syn_in"]})
 
         self.spikedetectors = nest.Create("spike_detector",
                                           params={"withgid": True,
                                                   "withtime": True})
 
         self.noise = nest.Create('noise_generator')
-        nest.SetStatus(
-            self.noise, [{'mean': self.mean_noise,
-                          'std': self.std_noise}])
+        nest.SetStatus(self.noise,
+                       [{'mean': self.mean_noise,
+                         'std': self.std_noise}])
 
         self.built = True
 
@@ -253,12 +258,13 @@ class iaf_neuron(object):
 
         syn_dict = {'weight': self.noise_weight}
         nest.Connect(self.noise, self.neurons, syn_spec=syn_dict)
+        nest.Connect(self.multimeters, self.neurons, "one_to_one")
 
         self.connected = True
 
     # ---------------------------------------------------------------#
 
-    def run(self):
+    def run(self, spike_to_npz=False, voltage_to_npz=False):
         if not self.connected:
             self.connect()
 
@@ -269,10 +275,28 @@ class iaf_neuron(object):
         ts, gids = get_spike_times(self.spikedetectors)
 
         path = "../data/npz/"
-        subname = str('%.3f-%.3f' % (
-            self.weight_coupling, self.std_noise))
+        subname = str('%.3f-%.3f-%.3f' % (self.weight_coupling,
+                                          self.std_noise,
+                                          self.tau_syn_in))
 
-        np.savez(path+"spk-"+subname, ts=ts, gids=gids)
+        if spike_to_npz:
+            np.savez(path+"spk-"+subname, ts=ts, gids=gids)
+
+        if voltage_to_npz:
+            dmm = nest.GetStatus(self.multimeters)[0]['events']
+            ts = dmm["times"]
+            I_syn_in = dmm["I_syn_in"][ts > self.t_trans]
+            n = len(ts[ts > self.t_trans])
+            Vms = np.zeros((self.N, n))
+            for i in range(self.N):
+                dmm = nest.GetStatus(self.multimeters)[i]['events']
+                Vms[i, :] = dmm["V_m"][ts > self.t_trans]
+            t = ts[ts > self.t_trans]
+
+            np.savez(path+"v-"+subname,
+                     t=t,
+                     I_syn_in=I_syn_in,
+                     v=np.mean(Vms, axis=0))
     # ---------------------------------------------------------------#
 
 
@@ -352,12 +376,12 @@ def calculate_spike_synchrony_pyspike(ts, gids, interval=None):
 
 
 def make_er_graph(N, p, seed=1256):
-    import os
-    if not os.path.exists('dat'):
-        os.makedirs('dat')
+
     G = nx.erdos_renyi_graph(N, p, seed=seed, directed=False)
     adj = np.asarray(nx.to_numpy_matrix(G), dtype=int)
-    np.savetxt('dat/C.dat', adj, fmt="%d")
+
+    return adj
+
 # ---------------------------------------------------------------#
 
 
@@ -495,7 +519,7 @@ def filter_gaussian(signal, fwhm):
     filtered = gaussian_filter1d(signal, sigma, mode='reflect')
 
     return filtered
-#--------------------------------------------------------------#
+# --------------------------------------------------------------#
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -504,14 +528,14 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     high = highcut / nyq
     b, a = butter(order, [low, high], btype='band')
     return b, a
-#--------------------------------------------------------------#
+# --------------------------------------------------------------#
 
 
 def filter_bandpass(ar_signal, sampling_rate, lowcut, highcut, order=5):
     b, a = butter_bandpass(lowcut, highcut, sampling_rate, order)
 
     return filtfilt(b, a, ar_signal)
-#--------------------------------------------------------------#
+# --------------------------------------------------------------#
 
 
 def plot_rhythms_from_file(
@@ -617,7 +641,7 @@ def plot_power_spectrum(f, P, ax, label=None, xlim=None):
 
 def fano_factor(dist):
     """
-    Compute the Fano factor sigma^2_n / mean_n of a given distribution 
+    Compute the Fano factor sigma^2_n / mean_n of a given distribution
     """
     fn = np.var(dist) / np.mean(dist)
     return fn
